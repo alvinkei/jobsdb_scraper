@@ -85,8 +85,20 @@ def main():
     output = []
 
     file_name = 'job_postings.csv'
+    
+    existing_urls = set()
+    if os.path.isfile(file_name):
+        with open(file_name, 'r', newline='', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if 'job_posting_url' in row:
+                    existing_urls.add(row['job_posting_url'])
+    print(f"Found {len(existing_urls)} existing job URLs in {file_name}.")
+    
+    file_exists = os.path.isfile(file_name)
+    
     with open(file_name, 'a', newline='', encoding='utf-8') as csvfile:
-        fieldnames = ["location", "search_keyword", "job_title", "company_name", "job_posting_url", "industry_type", "work_type", "posted_time"]
+        fieldnames = ["location", "search_keyword", "job_title", "company_name", "job_posting_url", "industry_type", "work_type", "posted_time", "job_description"]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         if not os.path.isfile(file_name):
             writer.writeheader()
@@ -121,6 +133,10 @@ def main():
                             company_name = trytogetobject('company_name', job_detail_page)
                             # job_posting_url = job_detail_page.find_element(By.CSS_SELECTOR, css_selectors["job_posting_url"]).get_attribute('href')
                             job_posting_url = trytogetobject('job_posting_url', job_detail_page)
+                            
+                            if job_posting_url in existing_urls:
+                                print(f"Skipping duplicate job: {job_title}")
+                                continue
                             # location = job_detail_page.find_element(By.CSS_SELECTOR, css_selectors["location"]).text
                             location = trytogetobject('location', job_detail_page)
                             # industry_type = job_detail_page.find_element(By.CSS_SELECTOR, css_selectors["industry_type"]).text
@@ -137,8 +153,9 @@ def main():
                             posted_time = calculate_posted_date(posted_info)
                             print(posted_info, posted_time)
                             ## posted_time = calculate_posted_date(sub_elements.text)    
-
-                            # if url exist in csv file (url):
+                            job_description = trytogetobject('job_description', job_detail_page)
+                            # TODO 
+                            # if url exist in csv file (url): to check for data replication
                             # continue                      
 
                             job_data = {
@@ -149,7 +166,8 @@ def main():
                                 "job_posting_url": job_posting_url,
                                 "industry_type": industry_type,
                                 "work_type": work_type,
-                                "posted_time": posted_time
+                                "posted_time": posted_time,
+                                "job_description": job_description
                                 # TODO: "job_description": processed_job_description
                             }
 
