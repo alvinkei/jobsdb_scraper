@@ -1,6 +1,7 @@
 import csv
 import json
 import re
+import os
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -35,6 +36,20 @@ css_selectors = {
     "job_description": "[data-automation='jobAdDetails']"
 }
 
+def trytogetobject(css_selector, parent):
+    if css_selector != 'job_posting_url':
+        try:
+            capture_item = parent.find_element(By.CSS_SELECTOR, css_selectors[css_selector]).text
+        except (NoSuchElementException, TimeoutException) as e:
+            print(f"Skipping {css_selector}, likely an ad or missing data: {e}")
+    
+    else:
+        try:
+            capture_item = parent.find_element(By.CSS_SELECTOR, css_selectors[css_selector]).get_attribute('href')
+        except (NoSuchElementException, TimeoutException) as e:
+            print(f"Skipping {css_selector}, likely an ad or missing data: {e}")
+    
+    return capture_item
 
 def calculate_posted_date(posted_time_text):
     """
@@ -53,6 +68,8 @@ def calculate_posted_date(posted_time_text):
         hours = int(posted_time_text.replace("h ago", ""))
         date = datetime.now() - timedelta(hours=hours)
         return date.strftime("%Y%m%d")
+    elif "m ago" in posted_time_text:
+        return datetime.now().strftime("%Y%m%d") 
     else:
         return None
 
@@ -67,10 +84,12 @@ def main():
 
     output = []
 
-    with open('job_postings.csv', 'w', newline='', encoding='utf-8') as csvfile:
-        fieldnames = ["location", "search_keyword", "job_title", "company_name", "job_posting_url", "posted_time", "industry_type", "work_type", "posted_time"]
+    file_name = 'job_postings.csv'
+    with open(file_name, 'a', newline='', encoding='utf-8') as csvfile:
+        fieldnames = ["location", "search_keyword", "job_title", "company_name", "job_posting_url", "industry_type", "work_type", "posted_time"]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
+        if not os.path.isfile(file_name):
+            writer.writeheader()
 
         for location in locations:
             for keyword in search_keywords:
@@ -94,24 +113,33 @@ def main():
                     job_cards = job_card_list.find_elements(By.XPATH, "./div")
                     
                     for job_card in job_cards:
-                        try:
                             job_card.click()
                             job_detail_page = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, css_selectors["job_detail_page"])))
-                            job_title = job_detail_page.find_element(By.CSS_SELECTOR, css_selectors["job_title"]).text
-                            company_name = job_detail_page.find_element(By.CSS_SELECTOR, css_selectors["company_name"]).text
-                            job_posting_url = job_detail_page.find_element(By.CSS_SELECTOR, css_selectors["job_posting_url"]).get_attribute('href')
-                            location = job_detail_page.find_element(By.CSS_SELECTOR, css_selectors["location"]).text
-                            industry_type = job_detail_page.find_element(By.CSS_SELECTOR, css_selectors["industry_type"]).text
-                            work_type = job_detail_page.find_element(By.CSS_SELECTOR, css_selectors["work_type"]).text
+                            # job_title = job_detail_page.find_element(By.CSS_SELECTOR, css_selectors["job_title"]).text
+                            job_title = trytogetobject('job_title', job_detail_page)
+                            # company_name = job_detail_page.find_element(By.CSS_SELECTOR, css_selectors["company_name"]).text
+                            company_name = trytogetobject('company_name', job_detail_page)
+                            # job_posting_url = job_detail_page.find_element(By.CSS_SELECTOR, css_selectors["job_posting_url"]).get_attribute('href')
+                            job_posting_url = trytogetobject('job_posting_url', job_detail_page)
+                            # location = job_detail_page.find_element(By.CSS_SELECTOR, css_selectors["location"]).text
+                            location = trytogetobject('location', job_detail_page)
+                            # industry_type = job_detail_page.find_element(By.CSS_SELECTOR, css_selectors["industry_type"]).text
+                            industry_type = trytogetobject('industry_type', job_detail_page)
+                            # work_type = job_detail_page.find_element(By.CSS_SELECTOR, css_selectors["work_type"]).text
+                            work_type = trytogetobject('work_type', job_detail_page)
                             sub_elements = job_detail_page.find_elements(By.CSS_SELECTOR, "*")
                             for elements in sub_elements:
                                 if "ago" in elements.text:
                                     match = re.search(pattern, elements.text, flags)
                                     end = match.end()
-                                    print(elements.text[match.start(): end + 8])
+                                    posted_info = elements.text[match.start(): end + 8]
                                     break
-                            posted_time = 0
-                            ## posted_time = calculate_posted_date(sub_elements.text)                            
+                            posted_time = calculate_posted_date(posted_info)
+                            print(posted_info, posted_time)
+                            ## posted_time = calculate_posted_date(sub_elements.text)    
+
+                            # if url exist in csv file (url):
+                            # continue                      
 
                             job_data = {
                                 "search_keyword": keyword,
@@ -129,9 +157,6 @@ def main():
                             writer.writerow(job_data)
                             csvfile.flush()
                             print(f'scraped {job_title} at {company_name}')
-
-                        except (NoSuchElementException, TimeoutException) as e:
-                            print(f"Skipping a job card, likely an ad or missing data: {e}")
 
                     try:
                         page += 1
