@@ -146,7 +146,7 @@ def main():
                                 "location": location,
                                 "job_title": job_title,
                                 "company_name": company_name,
-                                "job_posting_url": f"https://hk.jobsdb.com/{job_posting_url}",
+                                "job_posting_url": job_posting_url,
                                 "industry_type": industry_type,
                                 "work_type": work_type,
                                 "posted_time": posted_time
